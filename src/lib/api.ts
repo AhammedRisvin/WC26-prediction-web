@@ -46,6 +46,26 @@ export async function getMatches() {
   return data;
 }
 
+export async function getMyPredictions() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, match_id, home_score, away_score, advancing_team, submitted_at')
+    .order('submitted_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function getPublishedPredictionResults() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('published_prediction_results')
+    .select('*')
+    .order('kickoff_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function savePrediction(
   matchId: string,
   homeScore: number,
