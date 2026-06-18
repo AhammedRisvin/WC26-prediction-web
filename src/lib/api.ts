@@ -48,9 +48,13 @@ export async function getMatches() {
 
 export async function getMyPredictions() {
   if (!supabase) return [];
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) return [];
   const { data, error } = await supabase
     .from('predictions')
     .select('id, match_id, home_score, away_score, advancing_team, submitted_at')
+    .eq('player_id', authData.user.id)
     .order('submitted_at', { ascending: false });
   if (error) throw error;
   return data;
