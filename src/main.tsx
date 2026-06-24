@@ -959,9 +959,11 @@ function MatchRow({
         </div>
       </div>
       <div className="fixture-action">
-        {prediction && m.status !== "completed" && (
+        {prediction && (
           <small>
-            <ShieldCheck /> Prediction locked
+            <ShieldCheck />{" "}
+            {m.status === "completed" ? "Your prediction" : "Prediction locked"}
+            : {prediction.home_score}–{prediction.away_score}
           </small>
         )}
         <button
