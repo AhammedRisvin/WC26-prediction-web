@@ -21,6 +21,7 @@ import { supabase } from "./lib/supabase";
 import {
   addMatch,
   changePassword,
+  editMatch,
   getMatches,
   getMyPredictions,
   getMyProfile,
@@ -205,6 +206,7 @@ function Game() {
   const [loading, setLoading] = useState(true),
     [active, setActive] = useState<DbMatch | null>(null),
     [organizer, setOrganizer] = useState(false),
+    [editMatchDetails, setEditMatchDetails] = useState<DbMatch | null>(null),
     [resultMatch, setResultMatch] = useState<DbMatch | null>(null),
     [detailMatch, setDetailMatch] = useState<DbMatch | null>(null),
     [profileOpen, setProfileOpen] = useState(false);
@@ -473,6 +475,7 @@ function Game() {
                 predictionFor={predictionFor}
                 organizer={Boolean(profile?.is_organizer)}
                 open={setActive}
+                edit={setEditMatchDetails}
                 result={setResultMatch}
                 details={setDetailMatch}
               />
@@ -508,17 +511,10 @@ function Game() {
         {tab === "shame" && (
           <>
             <PageHead
-              title="No receipts yet."
-              copy="The Shame Wall wakes up after results are published."
+              title="Receipts, served cold."
+              copy="Wrong calls, missed picks and cold streaks after published results."
             />
-            <div className="empty-state compact">
-              <span>🧊</span>
-              <h2>Everyone is innocent—for now.</h2>
-              <p>
-                Wrong streaks, missed matches and wooden spoons will appear here
-                automatically.
-              </p>
-            </div>
+            <ShameWall rows={visibleBoard} results={published} />
           </>
         )}
       </main>
@@ -631,6 +627,13 @@ function Game() {
       )}
       {organizer && (
         <Organizer close={() => setOrganizer(false)} saved={load} />
+      )}
+      {editMatchDetails && (
+        <Organizer
+          match={editMatchDetails}
+          close={() => setEditMatchDetails(null)}
+          saved={load}
+        />
       )}
       {resultMatch && (
         <ResultForm
@@ -800,6 +803,7 @@ function MatchTimeline({
   predictionFor,
   organizer,
   open,
+  edit,
   result,
   details,
 }: {
@@ -807,6 +811,7 @@ function MatchTimeline({
   predictionFor: (id: string) => Prediction | undefined;
   organizer: boolean;
   open: (m: DbMatch) => void;
+  edit: (m: DbMatch) => void;
   result: (m: DbMatch) => void;
   details: (m: DbMatch) => void;
 }) {
@@ -835,6 +840,7 @@ function MatchTimeline({
               prediction={predictionFor(m.id)}
               organizer={organizer}
               open={() => open(m)}
+              edit={() => edit(m)}
               result={() => result(m)}
               details={() => details(m)}
             />
@@ -848,6 +854,7 @@ function MatchRow({
   m,
   open,
   organizer,
+  edit,
   result,
   details,
   prediction,
@@ -855,6 +862,7 @@ function MatchRow({
   m: DbMatch;
   open: () => void;
   organizer: boolean;
+  edit: () => void;
   result: () => void;
   details: () => void;
   prediction?: Prediction;
@@ -876,6 +884,7 @@ function MatchRow({
               ? `IN ${hours}H`
               : "UPCOMING",
     canAddResult = organizer && resultReady && m.status !== "completed",
+    canEditMatch = organizer && !started && m.status === "scheduled",
     centreKind =
       m.status === "completed"
         ? "final"
@@ -966,6 +975,12 @@ function MatchRow({
             : {prediction.home_score}–{prediction.away_score}
           </small>
         )}
+        {canEditMatch && (
+          <button type="button" onClick={edit}>
+            Edit match details
+            <ChevronRight />
+          </button>
+        )}
         <button
           disabled={
             !canAddResult &&
@@ -983,6 +998,154 @@ function MatchRow({
         </button>
       </div>
     </article>
+  );
+}
+function ShameWall({
+  rows,
+  results,
+}: {
+  rows: BoardRow[];
+  results: PublishedResult[];
+}) {
+  const completedRows = results.filter((r) => r.result_home_score != null),
+    wrongRows = completedRows.filter(
+      (r) => r.predicted_home_score != null && !r.correct,
+    ),
+    missedRows = completedRows.filter((r) => r.predicted_home_score == null),
+    mostWrong = [...rows].sort((a, b) => b.wrong - a.wrong).slice(0, 5),
+    mostMissed = [...rows].sort((a, b) => b.missed - a.missed).slice(0, 5),
+    recentWrong = [...wrongRows]
+      .sort((a, b) => +new Date(b.kickoff_at) - +new Date(a.kickoff_at))
+      .slice(0, 6),
+    coldStreaks = rows
+      .map((player) => {
+        const playerRows = completedRows
+          .filter((r) => r.player_id === player.id)
+          .sort((a, b) => +new Date(b.kickoff_at) - +new Date(a.kickoff_at));
+        let streak = 0;
+        for (const row of playerRows) {
+          if (row.predicted_home_score != null && !row.correct) streak += 1;
+          else break;
+        }
+        return { ...player, streak };
+      })
+      .sort((a, b) => b.streak - a.streak)
+      .slice(0, 5);
+
+  if (!completedRows.length) {
+    return (
+      <div className="empty-state compact">
+        <span>--</span>
+        <h2>Everyone is innocent for now.</h2>
+        <p>
+          Wrong streaks, missed matches and wooden spoons will appear here
+          automatically after Hashil publishes results.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="shame-wall">
+      <div className="shame-summary">
+        <div>
+          <span>Total wrong</span>
+          <b>{wrongRows.length}</b>
+          <small>Published picks that missed</small>
+        </div>
+        <div>
+          <span>Total missed</span>
+          <b>{missedRows.length}</b>
+          <small>No pick submitted</small>
+        </div>
+        <div>
+          <span>Current coldest</span>
+          <b>{coldStreaks[0]?.display_name ?? "None"}</b>
+          <small>{coldStreaks[0]?.streak ?? 0} wrong in a row</small>
+        </div>
+      </div>
+      <div className="shame-grid">
+        <ShameList
+          title="Most wrong"
+          label="wrong"
+          rows={mostWrong}
+          value={(row) => row.wrong}
+        />
+        <ShameList
+          title="Most missed"
+          label="missed"
+          rows={mostMissed}
+          value={(row) => row.missed}
+        />
+        <ShameList
+          title="Cold streak"
+          label="wrong in a row"
+          rows={coldStreaks}
+          value={(row) => row.streak ?? 0}
+        />
+      </div>
+      <div className="shame-recent">
+        <header>
+          <span>Latest wrong calls</span>
+          <b>Fresh receipts</b>
+        </header>
+        {recentWrong.length ? (
+          recentWrong.map((r) => (
+            <article key={`${r.match_id}-${r.player_id}`}>
+              <div>
+                <Avatar name={r.display_name} />
+                <span>
+                  <b>{r.display_name}</b>
+                  <small>
+                    {r.home_team} vs {r.away_team}
+                  </small>
+                </span>
+              </div>
+              <strong>
+                {r.predicted_home_score}-{r.predicted_away_score}
+              </strong>
+              <small>
+                Final {r.result_home_score}-{r.result_away_score}
+              </small>
+            </article>
+          ))
+        ) : (
+          <p>No wrong calls yet.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+function ShameList({
+  title,
+  label,
+  rows,
+  value,
+}: {
+  title: string;
+  label: string;
+  rows: Array<BoardRow & { streak?: number }>;
+  value: (row: BoardRow & { streak?: number }) => number;
+}) {
+  return (
+    <div className="shame-list">
+      <header>
+        <span>Shame board</span>
+        <b>{title}</b>
+      </header>
+      {rows.map((row, index) => (
+        <article key={row.id}>
+          <i>{index + 1}</i>
+          <Avatar name={row.display_name} path={row.avatar_path} />
+          <span>
+            <b>{row.display_name}</b>
+            <small>
+              {value(row)} {label}
+            </small>
+          </span>
+        </article>
+      ))}
+    </div>
   );
 }
 function Board({
@@ -1321,14 +1484,32 @@ function ResultDetails({
     </div>
   );
 }
-function Organizer({ close, saved }: { close: () => void; saved: () => void }) {
-  const [home, setHome] = useState("Brazil"),
-    [away, setAway] = useState("Morocco"),
-    [stage, setStage] = useState("GROUP STAGE"),
-    [date, setDate] = useState(""),
-    [hour, setHour] = useState("08"),
-    [minute, setMinute] = useState("00"),
-    [period, setPeriod] = useState("PM"),
+function Organizer({
+  match,
+  close,
+  saved,
+}: {
+  match?: DbMatch;
+  close: () => void;
+  saved: () => void;
+}) {
+  const initialKickoff = match ? new Date(match.kickoff_at) : null,
+    initialHour24 = initialKickoff?.getHours() ?? 20,
+    initialHour12 = initialHour24 % 12 || 12,
+    editing = Boolean(match);
+  const [home, setHome] = useState(match?.home_team ?? "Brazil"),
+    [away, setAway] = useState(match?.away_team ?? "Morocco"),
+    [stage, setStage] = useState(match?.stage ?? "GROUP STAGE"),
+    [date, setDate] = useState(
+      initialKickoff
+        ? `${initialKickoff.getFullYear()}-${String(initialKickoff.getMonth() + 1).padStart(2, "0")}-${String(initialKickoff.getDate()).padStart(2, "0")}`
+        : "",
+    ),
+    [hour, setHour] = useState(String(initialHour12).padStart(2, "0")),
+    [minute, setMinute] = useState(
+      String(initialKickoff?.getMinutes() ?? 0).padStart(2, "0"),
+    ),
+    [period, setPeriod] = useState(initialHour24 >= 12 ? "PM" : "AM"),
     [error, setError] = useState(""),
     [saving, setSaving] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -1344,17 +1525,25 @@ function Organizer({ close, saved }: { close: () => void; saved: () => void }) {
     setSaving(true);
     setError("");
     try {
-      await addMatch({
+      const input = {
         homeTeam: home,
         awayTeam: away,
         stage,
         kickoffAt: kickoff.toISOString(),
         knockout: stage !== "GROUP STAGE",
-      });
+      };
+      if (match) await editMatch(match.id, input);
+      else await addMatch(input);
       await saved();
       close();
     } catch (x) {
-      setError(x instanceof Error ? x.message : "Could not add match.");
+      setError(
+        x instanceof Error
+          ? x.message
+          : editing
+            ? "Could not update match."
+            : "Could not add match.",
+      );
       setSaving(false);
     }
   };
@@ -1372,8 +1561,12 @@ function Organizer({ close, saved }: { close: () => void; saved: () => void }) {
         <div className="organizer-scroll">
           <div className="organizer-head">
             <span>HASHIL · ORGANIZER CONTROL</span>
-            <h2>Create fixture</h2>
-            <p>Flags and country styling are selected automatically.</p>
+            <h2>{editing ? "Edit fixture" : "Create fixture"}</h2>
+            <p>
+              {editing
+                ? "Update match details before kickoff."
+                : "Flags and country styling are selected automatically."}
+            </p>
           </div>
           <div className="team-picker">
             <label>
@@ -1454,7 +1647,13 @@ function Organizer({ close, saved }: { close: () => void; saved: () => void }) {
         </div>
         <div className="organizer-footer">
           <button disabled={saving}>
-            {saving ? "Publishing fixture…" : "Publish fixture"}
+            {saving
+              ? editing
+                ? "Saving fixture..."
+                : "Publishing fixture..."
+              : editing
+                ? "Save fixture"
+                : "Publish fixture"}
             <ChevronRight />
           </button>
         </div>

@@ -106,6 +106,29 @@ export async function addMatch(input: {
   return data;
 }
 
+export async function editMatch(
+  matchId: string,
+  input: {
+    homeTeam: string;
+    awayTeam: string;
+    kickoffAt: string;
+    stage: string;
+    knockout: boolean;
+  },
+) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('organizer_update_match', {
+    p_match_id: matchId,
+    p_home_team: input.homeTeam,
+    p_away_team: input.awayTeam,
+    p_kickoff_at: input.kickoffAt,
+    p_stage: input.stage,
+    p_is_knockout: input.knockout,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function publishResult(
   matchId: string,
   homeScore: number,
