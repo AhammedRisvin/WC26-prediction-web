@@ -30,6 +30,7 @@ import {
   savePrediction,
   signInWithCode,
   signOut,
+  updateResult,
   type PlayerProfile,
 } from "./lib/api";
 
@@ -895,7 +896,9 @@ function MatchRow({
             : "versus";
   const label =
     m.status === "completed"
-      ? "View result & predictions"
+      ? organizer
+        ? "Edit final score"
+        : "View result & predictions"
       : canAddResult
         ? overdue
           ? "Result overdue"
@@ -988,7 +991,13 @@ function MatchRow({
             (Boolean(prediction) || started)
           }
           onClick={
-            m.status === "completed" ? details : canAddResult ? result : open
+            m.status === "completed"
+              ? organizer
+                ? result
+                : details
+              : canAddResult
+                ? result
+                : open
           }
         >
           {label}
@@ -1670,8 +1679,9 @@ function ResultForm({
   close: () => void;
   saved: () => void;
 }) {
-  const [h, setH] = useState(""),
-    [a, setA] = useState(""),
+  const editing = match.status === "completed",
+    [h, setH] = useState(match.home_score?.toString() ?? ""),
+    [a, setA] = useState(match.away_score?.toString() ?? ""),
     [error, setError] = useState(""),
     [saving, setSaving] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -1679,11 +1689,15 @@ function ResultForm({
     setSaving(true);
     setError("");
     try {
-      await publishResult(match.id, +h, +a);
+      if (editing) {
+        await updateResult(match.id, +h, +a);
+      } else {
+        await publishResult(match.id, +h, +a);
+      }
       await saved();
       close();
     } catch (x) {
-      setError(x instanceof Error ? x.message : "Could not publish result.");
+      setError(x instanceof Error ? x.message : "Could not save result.");
       setSaving(false);
     }
   };
@@ -1695,8 +1709,12 @@ function ResultForm({
         </button>
         <div className="result-entry-head">
           <span>HASHIL · RESULT CONTROL</span>
-          <h2>Publish final score</h2>
-          <p>Enter the official score after 90 minutes.</p>
+          <h2>{editing ? "Edit final score" : "Publish final score"}</h2>
+          <p>
+            {editing
+              ? "Correct the official score and refresh the table."
+              : "Enter the official score after 90 minutes."}
+          </p>
         </div>
         <div className="result-score-entry">
           <label>
@@ -1737,8 +1755,9 @@ function ResultForm({
           <div>
             <b>This publishes immediately</b>
             <small>
-              Points and every player’s prediction outcome will be calculated
-              automatically.
+              {editing
+                ? "Points and every player's prediction outcome will update automatically."
+                : "Points and every player's prediction outcome will be calculated automatically."}
             </small>
           </div>
         </div>
@@ -1747,7 +1766,15 @@ function ResultForm({
           className="result-publish"
           disabled={saving || h === "" || a === ""}
         >
-          <span>{saving ? "Publishing result…" : "Publish final result"}</span>
+          <span>
+            {saving
+              ? editing
+                ? "Saving correction..."
+                : "Publishing result..."
+              : editing
+                ? "Save corrected result"
+                : "Publish final result"}
+          </span>
           <b>{h === "" || a === "" ? "—" : `${h}–${a}`}</b>
           <ChevronRight />
         </button>

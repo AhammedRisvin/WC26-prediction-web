@@ -145,3 +145,20 @@ export async function publishResult(
   if (error) throw error;
   return data;
 }
+
+export async function updateResult(
+  matchId: string,
+  homeScore: number,
+  awayScore: number,
+  advancingTeam?: string,
+) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('organizer_update_result', {
+    p_match_id: matchId,
+    p_home_score: homeScore,
+    p_away_score: awayScore,
+    p_advancing_team: advancingTeam ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
