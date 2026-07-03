@@ -896,9 +896,7 @@ function MatchRow({
             : "versus";
   const label =
     m.status === "completed"
-      ? organizer
-        ? "Edit final score"
-        : "View result & predictions"
+      ? "View result & predictions"
       : canAddResult
         ? overdue
           ? "Result overdue"
@@ -984,6 +982,12 @@ function MatchRow({
             <ChevronRight />
           </button>
         )}
+        {organizer && m.status === "completed" && (
+          <button type="button" onClick={result}>
+            Edit final score
+            <ChevronRight />
+          </button>
+        )}
         <button
           disabled={
             !canAddResult &&
@@ -992,9 +996,7 @@ function MatchRow({
           }
           onClick={
             m.status === "completed"
-              ? organizer
-                ? result
-                : details
+              ? details
               : canAddResult
                 ? result
                 : open
