@@ -311,8 +311,7 @@ function Game() {
   const canEditPrediction = (m: DbMatch, p?: Prediction) =>
     profile?.display_name === "Risvin" &&
     Boolean(p) &&
-    m.status === "scheduled" &&
-    Date.now() < new Date(m.kickoff_at).getTime() - 15 * 60 * 1000;
+    m.status === "scheduled";
   const openPredictionRoom = (m: DbMatch) => {
     const existing = predictionFor(m.id);
     setHome(existing?.home_score.toString() ?? "");
@@ -611,9 +610,10 @@ function Game() {
       </nav>
       {active &&
         active.status === "scheduled" &&
-        (!predictionFor(active.id) ||
-          canEditPrediction(active, predictionFor(active.id))) &&
-        new Date(active.kickoff_at).getTime() - Date.now() > 15 * 60 * 1000 && (
+        ((!predictionFor(active.id) &&
+          new Date(active.kickoff_at).getTime() - Date.now() >
+            15 * 60 * 1000) ||
+          canEditPrediction(active, predictionFor(active.id))) && (
           <div className="overlay">
             <form
               className="predictor"
@@ -824,6 +824,11 @@ function Hero({
                   Your pick: {prediction.home_score}–{prediction.away_score}
                 </b>
                 <small>Predictions are locked</small>
+                {canEditPrediction && (
+                  <button type="button" onClick={open}>
+                    Edit prediction <ChevronRight />
+                  </button>
+                )}
               </>
             )}
           </div>
