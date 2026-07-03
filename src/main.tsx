@@ -308,6 +308,17 @@ function Game() {
     );
   const predictionFor = (id: string) =>
     predictions.find((p) => p.match_id === id);
+  const canEditPrediction = (m: DbMatch, p?: Prediction) =>
+    profile?.display_name === "Risvin" &&
+    Boolean(p) &&
+    m.status === "scheduled" &&
+    Date.now() < new Date(m.kickoff_at).getTime() - 15 * 60 * 1000;
+  const openPredictionRoom = (m: DbMatch) => {
+    const existing = predictionFor(m.id);
+    setHome(existing?.home_score.toString() ?? "");
+    setAway(existing?.away_score.toString() ?? "");
+    setActive(m);
+  };
   const visibleBoard = board.map((row) =>
       row.id === profile?.id
         ? { ...row, predictions_made: predictions.length }
@@ -377,6 +388,7 @@ function Game() {
   }, []);
   const submit = async () => {
     if (!active) return;
+    const editingPrediction = Boolean(predictionFor(active.id));
     setNotice(null);
     try {
       await savePrediction(active.id, +home, +away);
@@ -388,7 +400,9 @@ function Game() {
       setHome("");
       setAway("");
       setNotice({
-        text: `Prediction saved: ${saved}. It cannot be edited.`,
+        text: editingPrediction
+          ? `Prediction updated: ${saved}.`
+          : `Prediction saved: ${saved}. It cannot be edited.`,
         kind: "success",
       });
     } catch (e) {
@@ -468,7 +482,11 @@ function Game() {
                 m={featured}
                 live={liveMatches.includes(featured)}
                 prediction={predictionFor(featured.id)}
-                open={() => setActive(featured)}
+                canEditPrediction={canEditPrediction(
+                  featured,
+                  predictionFor(featured.id),
+                )}
+                open={() => openPredictionRoom(featured)}
               />
             ) : (
               <EmptyMatches
@@ -523,8 +541,9 @@ function Game() {
               <MatchTimeline
                 matches={displayMatches}
                 predictionFor={predictionFor}
+                canEditPrediction={canEditPrediction}
                 organizer={Boolean(profile?.is_organizer)}
-                open={setActive}
+                open={openPredictionRoom}
                 edit={setEditMatchDetails}
                 result={setResultMatch}
                 details={setDetailMatch}
@@ -592,7 +611,8 @@ function Game() {
       </nav>
       {active &&
         active.status === "scheduled" &&
-        !predictionFor(active.id) &&
+        (!predictionFor(active.id) ||
+          canEditPrediction(active, predictionFor(active.id))) &&
         new Date(active.kickoff_at).getTime() - Date.now() > 15 * 60 * 1000 && (
           <div className="overlay">
             <form
@@ -610,7 +630,11 @@ function Game() {
                 <X />
               </button>
               <div className="predict-head">
-                <span>YOUR FINAL PREDICTION</span>
+                <span>
+                  {predictionFor(active.id)
+                    ? "EDIT RISVIN PREDICTION"
+                    : "YOUR FINAL PREDICTION"}
+                </span>
                 <b>{active.stage}</b>
                 <small>{formatKickoff(active.kickoff_at)}</small>
               </div>
@@ -646,16 +670,26 @@ function Game() {
               <div className="secure">
                 <LockKeyhole />
                 <div>
-                  <b>Final submission</b>
+                  <b>
+                    {predictionFor(active.id)
+                      ? "Risvin edit mode"
+                      : "Final submission"}
+                  </b>
                   <small>Hidden from everyone until kickoff</small>
                 </div>
-                <em>No edits</em>
+                <em>{predictionFor(active.id) ? "Edit" : "No edits"}</em>
               </div>
               <button className="confirm" disabled={home === "" || away === ""}>
-                Review prediction <ChevronRight />
+                {predictionFor(active.id)
+                  ? "Review edited prediction"
+                  : "Review prediction"}{" "}
+                <ChevronRight />
               </button>
               <p>
-                <ShieldCheck /> Once submitted, this prediction cannot be edited
+                <ShieldCheck />{" "}
+                {predictionFor(active.id)
+                  ? "Only Risvin can edit this before the lock."
+                  : "Once submitted, this prediction cannot be edited"}
               </p>
             </form>
           </div>
@@ -664,7 +698,11 @@ function Game() {
         <div className="overlay confirm-layer">
           <section className="confirm-sheet">
             <ShieldCheck />
-            <h2>Submit this final prediction?</h2>
+            <h2>
+              {predictionFor(active.id)
+                ? "Save edited prediction?"
+                : "Submit this final prediction?"}
+            </h2>
             <p>
               {active.home_team}{" "}
               <b>
@@ -672,10 +710,16 @@ function Game() {
               </b>{" "}
               {active.away_team}
             </p>
-            <small>Once submitted, this prediction cannot be edited.</small>
+            <small>
+              {predictionFor(active.id)
+                ? "This replaces Risvin's previous score."
+                : "Once submitted, this prediction cannot be edited."}
+            </small>
             <div>
               <button onClick={() => setConfirming(false)}>Go back</button>
-              <button onClick={submit}>Yes, submit it</button>
+              <button onClick={submit}>
+                {predictionFor(active.id) ? "Yes, save edit" : "Yes, submit it"}
+              </button>
             </div>
           </section>
         </div>
@@ -742,11 +786,13 @@ function Hero({
   m,
   open,
   prediction,
+  canEditPrediction = false,
   live = false,
 }: {
   m: DbMatch;
   open: () => void;
   prediction?: Prediction;
+  canEditPrediction?: boolean;
   live?: boolean;
 }) {
   return (
@@ -856,6 +902,7 @@ function PageHead({ title, copy }: { title: string; copy: string }) {
 function MatchTimeline({
   matches,
   predictionFor,
+  canEditPrediction,
   organizer,
   open,
   edit,
@@ -864,6 +911,7 @@ function MatchTimeline({
 }: {
   matches: DbMatch[];
   predictionFor: (id: string) => Prediction | undefined;
+  canEditPrediction: (m: DbMatch, p?: Prediction) => boolean;
   organizer: boolean;
   open: (m: DbMatch) => void;
   edit: (m: DbMatch) => void;
@@ -893,6 +941,7 @@ function MatchTimeline({
             <MatchRow
               m={m}
               prediction={predictionFor(m.id)}
+              canEditPrediction={canEditPrediction(m, predictionFor(m.id))}
               organizer={organizer}
               open={() => open(m)}
               edit={() => edit(m)}
@@ -913,6 +962,7 @@ function MatchRow({
   result,
   details,
   prediction,
+  canEditPrediction,
 }: {
   m: DbMatch;
   open: () => void;
@@ -921,6 +971,7 @@ function MatchRow({
   result: () => void;
   details: () => void;
   prediction?: Prediction;
+  canEditPrediction: boolean;
 }) {
   const elapsed = Date.now() - new Date(m.kickoff_at).getTime(),
     started = elapsed >= 0,
@@ -1033,6 +1084,12 @@ function MatchRow({
         {canEditMatch && (
           <button type="button" onClick={edit}>
             Edit match details
+            <ChevronRight />
+          </button>
+        )}
+        {canEditPrediction && (
+          <button type="button" onClick={open}>
+            Edit prediction
             <ChevronRight />
           </button>
         )}
