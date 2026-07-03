@@ -210,6 +210,7 @@ function Game() {
     [editMatchDetails, setEditMatchDetails] = useState<DbMatch | null>(null),
     [resultMatch, setResultMatch] = useState<DbMatch | null>(null),
     [detailMatch, setDetailMatch] = useState<DbMatch | null>(null),
+    [tableStage, setTableStage] = useState("ALL"),
     [profileOpen, setProfileOpen] = useState(false);
   const [home, setHome] = useState(""),
     [away, setAway] = useState(""),
@@ -308,10 +309,53 @@ function Game() {
   const predictionFor = (id: string) =>
     predictions.find((p) => p.match_id === id);
   const visibleBoard = board.map((row) =>
-    row.id === profile?.id
-      ? { ...row, predictions_made: predictions.length }
-      : row,
-  );
+      row.id === profile?.id
+        ? { ...row, predictions_made: predictions.length }
+        : row,
+    ),
+    completedStageOptions = Array.from(
+      new Set(completed.map((m) => m.stage).filter(Boolean)),
+    ),
+    stageMatchIds = new Set(
+      completed
+        .filter((m) => tableStage === "ALL" || m.stage === tableStage)
+        .map((m) => m.id),
+    ),
+    stageCompletedCount =
+      tableStage === "ALL" ? completed.length : stageMatchIds.size,
+    tableResults =
+      tableStage === "ALL"
+        ? published
+        : published.filter((r) => stageMatchIds.has(r.match_id)),
+    tableBoard =
+      tableStage === "ALL"
+        ? visibleBoard
+        : visibleBoard
+            .map((row) => {
+              const rows = tableResults.filter((r) => r.player_id === row.id),
+                predictionsMade = rows.filter(
+                  (r) => r.predicted_home_score != null,
+                ).length,
+                points = rows.filter((r) => r.correct === true).length,
+                wrong = rows.filter(
+                  (r) => r.predicted_home_score != null && !r.correct,
+                ).length;
+              return {
+                ...row,
+                predictions_made: predictionsMade,
+                points,
+                wrong,
+                missed: Math.max(stageCompletedCount - predictionsMade, 0),
+                elapsed_matches: stageCompletedCount,
+              };
+            })
+            .sort(
+              (a, b) =>
+                b.points - a.points ||
+                a.wrong - b.wrong ||
+                b.predictions_made - a.predictions_made ||
+                a.display_name.localeCompare(b.display_name),
+            );
   const refreshBoard = async () => {
     const b = await supabase!
       .from("leaderboard")
@@ -444,10 +488,15 @@ function Game() {
             </div>
             {visibleBoard.length ? (
               <Board
-                rows={visibleBoard}
-                results={published}
-                totalMatches={matches.length}
+                rows={tableBoard}
+                results={tableResults}
+                totalMatches={
+                  tableStage === "ALL" ? matches.length : stageCompletedCount
+                }
                 currentUserId={profile?.id}
+                stageOptions={completedStageOptions}
+                selectedStage={tableStage}
+                onStageChange={setTableStage}
               />
             ) : (
               <EmptyTable />
@@ -498,10 +547,15 @@ function Game() {
             <>
               {visibleBoard.length ? (
                 <Board
-                  rows={visibleBoard}
-                  results={published}
-                  totalMatches={matches.length}
+                  rows={tableBoard}
+                  results={tableResults}
+                  totalMatches={
+                    tableStage === "ALL" ? matches.length : stageCompletedCount
+                  }
                   currentUserId={profile?.id}
+                  stageOptions={completedStageOptions}
+                  selectedStage={tableStage}
+                  onStageChange={setTableStage}
                 />
               ) : (
                 <EmptyTable />
@@ -1164,32 +1218,70 @@ function Board({
   currentUserId,
   results,
   totalMatches,
+  stageOptions,
+  selectedStage,
+  onStageChange,
 }: {
   rows: BoardRow[];
   currentUserId?: string;
   results: PublishedResult[];
   totalMatches: number;
+  stageOptions: string[];
+  selectedStage: string;
+  onStageChange: (stage: string) => void;
 }) {
   const [selected, setSelected] = useState<BoardRow | null>(null),
     elapsed = Math.max(...rows.map((r) => r.elapsed_matches), 0),
     totalPredictions = rows.reduce((n, r) => n + r.predictions_made, 0),
     leader = rows[0],
-    hasPoints = rows.some((r) => r.points > 0);
+    hasPoints = rows.some((r) => r.points > 0),
+    scoped = selectedStage !== "ALL";
+  useEffect(() => {
+    setSelected(null);
+  }, [selectedStage]);
   return (
     <>
       <section className="board-shell">
+        <div className="board-toolbar">
+          <div>
+            <span>TABLE FILTER</span>
+            <b>{scoped ? selectedStage : "All rounds"}</b>
+          </div>
+          <label>
+            <span>Round</span>
+            <select
+              value={selectedStage}
+              onChange={(e) => onStageChange(e.target.value)}
+            >
+              <option value="ALL">All rounds</option>
+              {stageOptions.map((stage) => (
+                <option value={stage} key={stage}>
+                  {stage}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="board-summary">
           <div>
-            <span>{hasPoints ? "LEAGUE LEADER" : "LEAGUE STATUS"}</span>
+            <span>
+              {hasPoints
+                ? scoped
+                  ? "ROUND LEADER"
+                  : "LEAGUE LEADER"
+                : scoped
+                  ? "ROUND STATUS"
+                  : "LEAGUE STATUS"}
+            </span>
             <b>{hasPoints ? leader.display_name : "Awaiting results"}</b>
             <small>
               {hasPoints ? `${leader.points} points` : "No points awarded yet"}
             </small>
           </div>
           <div>
-            <span>MATCHES STARTED</span>
+            <span>{scoped ? "ROUND MATCHES" : "MATCHES STARTED"}</span>
             <b>{elapsed}</b>
-            <small>Across the league</small>
+            <small>{scoped ? selectedStage : "Across the league"}</small>
           </div>
           <div>
             <span>PREDICTIONS</span>
@@ -1242,7 +1334,9 @@ function Board({
                       {!hasPoints
                         ? "Waiting for first result"
                         : i === 0
-                          ? "Current leader"
+                          ? scoped
+                            ? "Round leader"
+                            : "Current leader"
                           : r.points === leader.points
                             ? "Level on points"
                             : `${leader.points - r.points} pts behind`}
