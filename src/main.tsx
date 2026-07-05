@@ -215,6 +215,18 @@ const Flag = ({ team }: { team: string }) =>
   ) : (
     <span className="team-fallback">{team.slice(0, 2).toUpperCase()}</span>
   );
+const stageClass = (stage: string) => {
+  const normalized = stage.trim().toUpperCase();
+  if (normalized === "GROUP STAGE") return "stage-group";
+  if (normalized === "ROUND OF 32") return "stage-r32";
+  if (normalized === "ROUND OF 16") return "stage-r16";
+  if (normalized === "QUARTER-FINAL" || normalized === "QUARTER FINAL")
+    return "stage-quarter";
+  if (normalized === "SEMI-FINAL" || normalized === "SEMI FINAL")
+    return "stage-semi";
+  if (normalized === "FINAL") return "stage-final";
+  return "stage-other";
+};
 
 function Game() {
   const [now, setNow] = useState(() => Date.now());
@@ -1042,6 +1054,8 @@ function MatchRow({
     <article
       className={
         "fixture match-card-pro " +
+        stageClass(m.stage) +
+        " " +
         (overdue && m.status !== "completed" ? "overdue" : "")
       }
     >
@@ -1796,6 +1810,7 @@ function Organizer({
               Competition stage
               <select value={stage} onChange={(e) => setStage(e.target.value)}>
                 <option>GROUP STAGE</option>
+                <option>ROUND OF 32</option>
                 <option>ROUND OF 16</option>
                 <option>QUARTER-FINAL</option>
                 <option>SEMI-FINAL</option>
