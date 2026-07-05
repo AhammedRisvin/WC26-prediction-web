@@ -136,6 +136,24 @@ const countries = [
   "USA",
   "Uzbekistan",
 ];
+const roundOf16Teams = [
+  "Argentina",
+  "Belgium",
+  "Brazil",
+  "Canada",
+  "Colombia",
+  "Egypt",
+  "England",
+  "France",
+  "Mexico",
+  "Morocco",
+  "Norway",
+  "Paraguay",
+  "Portugal",
+  "Spain",
+  "Switzerland",
+  "United States",
+];
 const flag: Record<string, string> = {
   Algeria: "dz",
   Argentina: "ar",
@@ -995,7 +1013,9 @@ function MatchRow({
               ? `IN ${hours}H`
               : "UPCOMING",
     canAddResult = organizer && resultReady && m.status !== "completed",
-    canEditMatch = organizer && !started && m.status === "scheduled",
+    canEditMatch =
+      organizer &&
+      (m.status === "completed" || (!started && m.status === "scheduled")),
     centreKind =
       m.status === "completed"
         ? "final"
@@ -1663,10 +1683,11 @@ function Organizer({
   const initialKickoff = match ? new Date(match.kickoff_at) : null,
     initialHour24 = initialKickoff?.getHours() ?? 20,
     initialHour12 = initialHour24 % 12 || 12,
-    editing = Boolean(match);
+    editing = Boolean(match),
+    editingCompleted = match?.status === "completed";
   const [home, setHome] = useState(match?.home_team ?? "Brazil"),
     [away, setAway] = useState(match?.away_team ?? "Morocco"),
-    [stage, setStage] = useState(match?.stage ?? "GROUP STAGE"),
+    [stage, setStage] = useState(match?.stage ?? "ROUND OF 16"),
     [date, setDate] = useState(
       initialKickoff
         ? `${initialKickoff.getFullYear()}-${String(initialKickoff.getMonth() + 1).padStart(2, "0")}-${String(initialKickoff.getDate()).padStart(2, "0")}`
@@ -1730,8 +1751,10 @@ function Organizer({
             <span>HASHIL · ORGANIZER CONTROL</span>
             <h2>{editing ? "Edit fixture" : "Create fixture"}</h2>
             <p>
-              {editing
-                ? "Update match details before kickoff."
+              {editingCompleted
+                ? "Correct the round or kickoff time after the result is published."
+                : editing
+                  ? "Update match details before kickoff."
                 : "Flags and country styling are selected automatically."}
             </p>
           </div>
@@ -1740,8 +1763,12 @@ function Organizer({
               <span>HOME TEAM</span>
               <div>
                 <Flag team={home} />
-                <select value={home} onChange={(e) => setHome(e.target.value)}>
-                  {countries.map((c) => (
+                <select
+                  value={home}
+                  onChange={(e) => setHome(e.target.value)}
+                  disabled={editingCompleted}
+                >
+                  {roundOf16Teams.map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
@@ -1752,8 +1779,12 @@ function Organizer({
               <span>AWAY TEAM</span>
               <div>
                 <Flag team={away} />
-                <select value={away} onChange={(e) => setAway(e.target.value)}>
-                  {countries.map((c) => (
+                <select
+                  value={away}
+                  onChange={(e) => setAway(e.target.value)}
+                  disabled={editingCompleted}
+                >
+                  {roundOf16Teams.map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
@@ -1765,7 +1796,6 @@ function Organizer({
               Competition stage
               <select value={stage} onChange={(e) => setStage(e.target.value)}>
                 <option>GROUP STAGE</option>
-                <option>ROUND OF 32</option>
                 <option>ROUND OF 16</option>
                 <option>QUARTER-FINAL</option>
                 <option>SEMI-FINAL</option>
