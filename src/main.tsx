@@ -396,6 +396,9 @@ function Game() {
                 b.predictions_made - a.predictions_made ||
                 a.display_name.localeCompare(b.display_name),
             );
+  const tournamentComplete =
+      matches.length > 0 && completed.length === matches.length,
+    champion = tournamentComplete ? visibleBoard[0] : null;
   const refreshBoard = async () => {
     const b = await supabase!
       .from("leaderboard")
@@ -506,7 +509,9 @@ function Game() {
                 </div>
               </div>
             </section>
-            {featured ? (
+            {champion ? (
+              <ChampionHero winner={champion} completedMatches={completed.length} />
+            ) : featured ? (
               <Hero
                 m={featured}
                 live={liveMatches.includes(featured)}
@@ -810,6 +815,61 @@ function Avatar({ name }: { name: string; path?: string | null }) {
     >
       {name.slice(0, 2).toUpperCase()}
     </span>
+  );
+}
+function ChampionHero({
+  winner,
+  completedMatches,
+}: {
+  winner: BoardRow;
+  completedMatches: number;
+}) {
+  return (
+    <section className="champion-hero" aria-label="Tournament champion">
+      <div className="champion-bursts" aria-hidden="true">
+        {Array.from({ length: 18 }, (_, i) => (
+          <i key={i} />
+        ))}
+      </div>
+      <div className="champion-copy">
+        <span>TOURNAMENT COMPLETE</span>
+        <h2>
+          {winner.display_name}
+          <em> is champion</em>
+        </h2>
+        <p>
+          The table has closed. {winner.display_name} finishes on{" "}
+          <b>{winner.points} points</b> from {completedMatches} completed
+          matches.
+        </p>
+        <div className="champion-stats">
+          <div>
+            <small>POINTS</small>
+            <strong>{winner.points}</strong>
+          </div>
+          <div>
+            <small>RIGHT</small>
+            <strong>{winner.points}</strong>
+          </div>
+          <div>
+            <small>WRONG</small>
+            <strong>{winner.wrong}</strong>
+          </div>
+          <div>
+            <small>MISSED</small>
+            <strong>{winner.missed}</strong>
+          </div>
+        </div>
+      </div>
+      <div className="champion-medal">
+        <div>
+          <Trophy />
+          <Avatar name={winner.display_name} path={winner.avatar_path} />
+        </div>
+        <b>{winner.display_name}</b>
+        <small>PRIVATE LEAGUE WINNER</small>
+      </div>
+    </section>
   );
 }
 function Hero({
